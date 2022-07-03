@@ -23,6 +23,9 @@ local ColorControl = clusters.ColorControl
 local CURRENT_X = "current_x_value" -- y value from xyY color space
 local CURRENT_Y = "current_y_value" -- x value from xyY color space
 local Y_TRISTIMULUS_VALUE = "y_tristimulus_value" -- Y tristimulus value which is used to convert color xyY -> RGB -> HSV
+local HUESAT_TIMER = "huesat_timer"
+local TARGET_HUE = "target_hue"
+local TARGET_SAT = "target_sat"
 
 local IKEA_XY_COLOR_BULB_FINGERPRINTS = {
   ["IKEA of Sweden"] = {
@@ -66,36 +69,79 @@ end
 local function set_color_handler(driver, device, cmd)
   local hue = cmd.args.color.hue > 99 and 99 or cmd.args.color.hue
   local sat = cmd.args.color.saturation
+
+
   local x, y, Y = utils.safe_hsv_to_xy(hue, sat)
   store_xyY_values(device, x, y, Y)
-  switch_defaults.on(driver,device,cmd)
+  switch_defaults.on(driver, device, cmd)
 
   device:send(ColorControl.commands.MoveToColor(device, x, y, 0x0000))
 
+  device:set_field(TARGET_HUE, nil)
+  device:set_field(TARGET_SAT, nil)
   device.thread:call_with_delay(2, query_device(device))
+end
+
+local huesat_timer_callback = function(driver, device, cmd)
+  return function()
+    local hue = device:get_field(TARGET_HUE)
+    local sat = device:get_field(TARGET_SAT)
+    hue = hue ~= nil and hue or device.state_cache.main.colorControl.hue.value
+    sat = sat ~= nil and sat or device.state_cache.main.colorControl.saturation.value
+    cmd.args = {
+      color = {
+        hue = hue,
+        saturation = sat
+      }
+    }
+    set_color_handler(driver, device, cmd)
+  end
 end
 
 local function set_hue_handler(driver, device, cmd)
-  local sat = device:get_latest_state("main", capabilities.colorControl.ID, capabilities.colorControl.saturation.NAME)
-  local hue = cmd.args.hue > 99 and 99 or cmd.args.hue
-  local x, y, Y = utils.safe_hsv_to_xy(hue, sat)
-  store_xyY_values(device, x, y, Y)
-  switch_defaults.on(driver,device,cmd)
-
-  device:send(ColorControl.commands.MoveToColor(device, x, y, 0x0000))
-
-  device.thread:call_with_delay(2, query_device(device))
+  local hue = cmd.args.hue
+  local huesat_timer = device:get_field(HUESAT_TIMER)
+  if huesat_timer ~= nil then
+    device.thread:cancel_timer(huesat_timer)
+    device:set_field(HUESAT_TIMER, nil)
+    local sat = device:get_field(TARGET_SAT)
+    if sat ~= nil then
+      cmd.args = {
+        color = {
+          hue = hue,
+          saturation = sat
+        }
+      }
+      set_color_handler(driver, device, cmd)
+      return
+    end
+  end
+  device:set_field(TARGET_HUE, hue)
+  huesat_timer = device.thread:call_with_delay(0.2, huesat_timer_callback(driver, device, cmd))
+  device:set_field(HUESAT_TIMER, huesat_timer)
 end
 
 local function set_saturation_handler(driver, device, cmd)
-  local hue = device:get_latest_state("main", capabilities.colorControl.ID, capabilities.colorControl.hue.NAME)
-  local x, y, Y = utils.safe_hsv_to_xy(hue, cmd.args.saturation)
-  store_xyY_values(device, x, y, Y)
-  switch_defaults.on(driver,device,cmd)
-
-  device:send(ColorControl.commands.MoveToColor(device, x, y, 0x0000))
-
-  device.thread:call_with_delay(2, query_device(device))
+  local sat = cmd.args.saturation
+  local huesat_timer = device:get_field(HUESAT_TIMER)
+  if huesat_timer ~= nil then
+    device.thread:cancel_timer(huesat_timer)
+    device:set_field(HUESAT_TIMER, nil)
+    local hue = device:get_field(TARGET_HUE)
+    if hue ~= nil then
+      cmd.args = {
+        color = {
+          hue = hue,
+          saturation = sat
+        }
+      }
+      set_color_handler(driver, device, cmd)
+      return
+    end
+  end
+  device:set_field(TARGET_SAT, sat)
+  huesat_timer = device.thread:call_with_delay(0.2, huesat_timer_callback(driver, device, cmd))
+  device:set_field(HUESAT_TIMER, huesat_timer)
 end
 
 local function current_x_attr_handler(driver, device, value, zb_rx)

@@ -96,7 +96,7 @@ test.register_coroutine_test(
 )
 
 test.register_coroutine_test(
-  "Added lifecycle should be handlded",
+  "Added lifecycle should be handled",
   function()
     test.socket.zigbee:__set_channel_ordering("relaxed")
     test.socket.device_lifecycle:__queue_receive({ mock_device.id, "added" })
@@ -158,7 +158,7 @@ test.register_coroutine_test(
 )
 
 test.register_coroutine_test(
-  "Capability 'switchLevel' command 'setLevel' on should be handled",
+  "Capability 'switchLevel' command 'setLevel' should be handled",
   function()
     test.socket.zigbee:__set_channel_ordering("relaxed")
     test.timer.__create_and_queue_test_time_advance_timer(2, "oneshot")
@@ -179,6 +179,7 @@ test.register_coroutine_test(
 test.register_coroutine_test(
   "Set Hue command test",
   function()
+    mock_device.wrapped_device.state_cache = {["main"] = {["colorControl"] = {["saturation"] = {["value"] = 65}}}}
     test.timer.__create_and_queue_test_time_advance_timer(2, "oneshot")
     test.socket.capability:__queue_receive({mock_device.id, { capability = "colorControl", component = "main", command = "setHue", args = { 75 } } })
 
@@ -187,7 +188,7 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send(
       {
         mock_device.id,
-        ColorControl.commands.MoveToColor(mock_device, 0x500F, 0x543B, 0x0000)
+        ColorControl.commands.MoveToColor(mock_device, 0x3E51, 0x255D, 0x0000)
       }
     )
 
@@ -202,6 +203,7 @@ test.register_coroutine_test(
 test.register_coroutine_test(
   "Set Saturation command test",
   function()
+    mock_device.wrapped_device.state_cache = {["main"] = {["colorControl"] = {["hue"] = {["value"] = 75}}}}
     test.socket.zigbee:__set_channel_ordering("relaxed")
     test.timer.__create_and_queue_test_time_advance_timer(2, "oneshot")
     test.socket.capability:__queue_receive({mock_device.id, { capability = "colorControl", component = "main", command = "setSaturation", args = { 65 } } })
@@ -211,7 +213,7 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send(
       {
         mock_device.id,
-        ColorControl.commands.MoveToColor(mock_device, 0x86EF, 0x5465, 0x0000)
+        ColorControl.commands.MoveToColor(mock_device, 0x3E51, 0x255D, 0x0000)
       }
     )
 
@@ -235,7 +237,7 @@ test.register_coroutine_test(
     test.socket.zigbee:__expect_send(
       {
         mock_device.id,
-        ColorControl.commands.MoveToColor(mock_device, 15953, 9565, 0x0000)
+        ColorControl.commands.MoveToColor(mock_device, 0x3E51, 0x255D, 0x0000)
       }
     )
 
